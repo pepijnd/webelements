@@ -1,0 +1,22 @@
+[package]
+name = "we-derive"
+version = "0.1.1"
+authors = ["Pepijn Dragt <pepijn.dragt@gmail.com>"]
+edition = "2018"
+license = "MIT OR Apache-2.0"
+homepage = "https://github.com/pdragt/webelements"
+repository = "https://github.com/pdragt/webelements"
+documentation = "https://docs.rs/webelements"
+readme = "README.md"
+keywords = ["web"]
+categories = ["gui", "wasm", "web-programming"]
+description = "A macro that transforms html to rust code"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+html_parser = "0.6.2"
+quote = "1.0.9"
+proc-macro2 = { version="1.0.26", features=["span-locations"] }
+syn = { version="1.0.71", features=["extra-traits"]}
