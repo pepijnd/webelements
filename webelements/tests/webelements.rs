@@ -4,7 +4,6 @@ use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
 wasm_bindgen_test_configure!(run_in_browser);
 
-
 #[we_builder(
     <div class="my-element" attr="value">
         <div class="repeated" we_field="repeated" we_repeat=5 />
@@ -20,7 +19,6 @@ struct MyElement {}
 )]
 #[derive(Debug, Clone, WebElement)]
 struct OtherElement {}
-
 
 #[wasm_bindgen_test]
 fn test_we_elements() {

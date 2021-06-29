@@ -1,4 +1,3 @@
-use std::iter::repeat;
 use std::str::FromStr;
 
 use html_parser::{Dom, Node};
@@ -31,9 +30,9 @@ fn parse_args(args: TokenStream, s_fields: &syn::FieldsNamed) -> DomParsed {
         Ok(dom) => gen_element(dom, s_fields),
         Err(e) => {
             let e = e.to_string();
-            let dom_start = args.first().unwrap().span();
-            let dom_end = args.last().unwrap().span();
-            let dom_span = dom_start.join(dom_end).unwrap();
+            let dom_start = args.first().expect("dom has a start").span();
+            let dom_end = args.last().expect("dom has an end").span();
+            let dom_span = dom_start.join(dom_end).expect("creating dom span");
             DomParsed {
                 fields: Default::default(),
                 root_type: None,
@@ -60,22 +59,20 @@ fn parse_dom(input: &[TokenTree]) -> html_parser::Result<Dom> {
             if span.line > end.line {
                 html.push('\n');
                 html.push_str(
-                    &repeat(' ')
-                        .take(span.column.saturating_sub(offset.unwrap()))
-                        .collect::<String>(),
+                    &" ".repeat(
+                        span.column
+                            .saturating_sub(offset.expect("html span cannot underflow")),
+                    ),
                 )
             } else {
-                html.push_str(
-                    &repeat(' ')
-                        .take(span.column - end.column)
-                        .collect::<String>(),
-                )
+                html.push_str(&" ".repeat(span.column - end.column))
             }
         } else {
             html.push_str(
-                &repeat(' ')
-                    .take(span.column.saturating_sub(offset.unwrap()))
-                    .collect::<String>(),
+                &" ".repeat(
+                    span.column
+                        .saturating_sub(offset.expect("html span cannot underflow")),
+                ),
             )
         }
         end = Some(token.span().end());
@@ -105,30 +102,40 @@ fn walk_dom(dom: &[Node], refs: &mut Vec<(Ident, syn::Path)>) -> Vec<(bool, Toke
                     is_field = value.clone()
                 } else if key == "we_element" {
                     // the custom path will be generated from the elements name
-                    let custom =
-                        syn::parse2::<syn::Path>(TokenStream::from_str(&element.name).unwrap())
-                            .unwrap();
+                    let custom = syn::parse2::<syn::Path>(
+                        TokenStream::from_str(&element.name).expect("custom path name tokenstream"),
+                    )
+                    .expect("custom path tokenstream");
                     is_custom = Some(custom);
 
                     // the custom element cant have any children because they can't be appended to it.
                     if !element.children.is_empty() {
-                        return vec![(false, quote! {
-                            compile_error!("`we_element` element cant have any children")
-                        })];
+                        return vec![(
+                            false,
+                            quote! {
+                                compile_error!("`we_element` element cant have any children")
+                            },
+                        )];
                     }
                 } else if key == "we_repeat" {
                     if let Some(n) = value {
                         if let Ok(n) = n.parse::<i64>() {
                             is_repeat = Some(n);
                         } else {
-                            return vec![(false, quote! {
-                                compile_error!("`we_repeat` mut have a positive interger value")
-                            })];
+                            return vec![(
+                                false,
+                                quote! {
+                                    compile_error!("`we_repeat` mut have a positive interger value")
+                                },
+                            )];
                         }
                     } else {
-                        return vec![(false, quote! {
-                            compile_error!("`we_repeat` needs a value")
-                        })];
+                        return vec![(
+                            false,
+                            quote! {
+                                compile_error!("`we_repeat` needs a value")
+                            },
+                        )];
                     }
                 } else {
                     attributes.push((key, value));
@@ -152,13 +159,15 @@ fn walk_dom(dom: &[Node], refs: &mut Vec<(Ident, syn::Path)>) -> Vec<(bool, Toke
 
             // if the element is not custom set the path to it to the parent crate
             let elem_type = is_custom.clone().unwrap_or_else(|| {
-                let field = syn::parse2::<syn::Path>(quote! { webelements::elem::#field }).unwrap();
-                syn::parse2::<syn::Path>(quote! { webelements::Element<#field> }).unwrap()
+                let field = syn::parse2::<syn::Path>(quote! { webelements::elem::#field })
+                    .expect("custom element field name");
+                syn::parse2::<syn::Path>(quote! { webelements::Element<#field> })
+                    .expect("custom element field path")
             });
 
             // if the element is to be repeated set the field type to `Vec<Field_Type>`
             let field_type = if is_repeat.is_some() {
-                syn::parse2::<syn::Path>(quote! { Vec<#elem_type> }).unwrap()
+                syn::parse2::<syn::Path>(quote! { Vec<#elem_type> }).expect("field type name")
             } else {
                 elem_type.clone()
             };
@@ -270,9 +279,12 @@ fn gen_element(dom: Dom, s_fields: &syn::FieldsNamed) -> DomParsed {
                 None
             }
         })
-        .unwrap_or_else(|| { errors = quote! { #errors; compile_error!("no root found") }; None } );
+        .unwrap_or_else(|| {
+            errors = quote! { #errors; compile_error!("no root found") };
+            None
+        });
     let elements = walk_dom(&dom.children, &mut refs);
-    let root = &elements.first().unwrap().1;
+    let root = &elements.first().expect("element needs to have a root").1;
     let ref_name: Vec<Ident> = refs.iter().map(|(s, _)| format_ident!("{}", s)).collect();
     let ref_value: Vec<Ident> = refs
         .iter()
@@ -299,7 +311,7 @@ fn gen_element(dom: Dom, s_fields: &syn::FieldsNamed) -> DomParsed {
             .map(|(ident, ty)| {
                 syn::Field::parse_named
                     .parse2(quote! { pub #ident: #ty })
-                    .unwrap()
+                    .expect("fields name")
             })
             .collect(),
         root_type,
@@ -339,7 +351,7 @@ pub fn we_builder(
                 s_fields.named.push(
                     syn::Field::parse_named
                         .parse2(quote! { pub root: #root })
-                        .unwrap(),
+                        .expect("root field token failed"),
                 );
                 for field in fields.iter() {
                     s_fields.named.push(field.clone())
@@ -363,7 +375,6 @@ pub fn we_builder(
 
                     impl std::ops::Deref for #ident {
                         type Target=webelements::Element<<Self as webelements::WebElementBuilder>::Elem>;
-                    
                         fn deref(&self) -> &Self::Target {
                             self.root.as_ref()
                         }
@@ -380,7 +391,6 @@ pub fn we_builder(
     println!("{}", tokens);
     tokens
 }
-
 
 #[proc_macro_derive(WebElement)]
 pub fn we_element_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {

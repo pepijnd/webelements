@@ -2,11 +2,11 @@ pub mod element;
 
 use std::{fmt::Display, ops::Deref};
 
-use wasm_bindgen::{JsCast, JsValue, prelude::Closure};
+use wasm_bindgen::{prelude::*, JsCast, JsValue};
 
+pub use element::{elem, Element, WebElement, WebElementBuilder};
 pub use we_derive::{we_builder, WebElement};
-pub use element::{Element, WebElement, WebElementBuilder, elem};
-use web_sys::KeyboardEvent;
+use web_sys::{KeyboardEvent, MessageEvent};
 
 #[non_exhaustive]
 #[derive(Debug)]
@@ -42,7 +42,7 @@ impl Display for Error {
                 }
             }
             Error::Cast(t) => writeln!(f, "unable to cast value to type `{}`", t),
-            n => writeln!(f, "{:?}", n)
+            n => writeln!(f, "{:?}", n),
         }
     }
 }
@@ -66,7 +66,7 @@ impl std::error::Error for Error {}
 pub type Result<T> = std::result::Result<T, Error>;
 
 pub struct Window {
-    window: web_sys::Window
+    window: web_sys::Window,
 }
 
 impl Deref for Window {
@@ -78,7 +78,7 @@ impl Deref for Window {
 }
 
 impl Window {
-    pub fn on_animation(&self, callback: impl FnMut() + 'static ) -> Result<()> {
+    pub fn on_animation(&self, callback: impl FnMut() + 'static) -> Result<()> {
         let closure = Closure::wrap(Box::new(callback) as Box<dyn FnMut()>);
         self.request_animation_frame(closure.as_ref().unchecked_ref())
             .map_err(Error::JsError)?;
@@ -89,19 +89,18 @@ impl Window {
 
 pub fn window() -> Result<Window> {
     Ok(Window {
-        window: web_sys::window().ok_or(Error::Window)?
+        window: web_sys::window().ok_or(Error::Window)?,
     })
 }
 
 pub struct Document {
-    document: web_sys::Document
+    document: web_sys::Document,
 }
 
 impl Document {
-    pub fn on_key(&self, mut callback: impl FnMut(KeyboardEvent) + 'static ) -> Result<()> {
-        let closure = Closure::wrap(Box::new( move |e| {
-            callback(e)
-        }) as Box<dyn FnMut(KeyboardEvent)>);
+    pub fn on_key(&self, mut callback: impl FnMut(KeyboardEvent) + 'static) -> Result<()> {
+        let closure =
+            Closure::wrap(Box::new(move |e| callback(e)) as Box<dyn FnMut(KeyboardEvent)>);
         self.document
             .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref())
             .map_err(Error::JsError)?;
@@ -124,8 +123,8 @@ impl Deref for Document {
 }
 
 pub fn document() -> Result<Document> {
-    Ok(Document{
-        document: window()?.document().ok_or(Error::Document)?
+    Ok(Document {
+        document: window()?.document().ok_or(Error::Document)?,
     })
 }
 
@@ -145,5 +144,64 @@ impl<T> Loggable for Result<T> {
 pub fn log<S: AsRef<str>>(str: S) {
     unsafe {
         web_sys::console::log_1(&JsValue::from_str(str.as_ref()));
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Worker {
+    worker: web_sys::Worker,
+}
+
+impl Worker {
+    pub fn new(ctor: impl AsRef<JsValue>) -> Result<Self> {
+        let ctor = ctor
+            .as_ref()
+            .dyn_ref::<js_sys::Function>()
+            .ok_or(Error::Value)?;
+        let worker = ctor
+            .call0(&JsValue::null())?
+            .dyn_into::<web_sys::Worker>()?;
+        Ok(Self { worker })
+    }
+
+    pub fn set_onmessage(&self, mut callback: impl FnMut(JsValue) + 'static) -> Result<()> {
+        let closure = Closure::wrap(Box::new(move |event| {
+            let event: MessageEvent = event;
+            callback(event.data())
+        }) as Box<dyn FnMut(web_sys::MessageEvent)>);
+        self.worker
+            .set_onmessage(Some(closure.into_js_value().unchecked_ref()));
+        Ok(())
+    }
+
+    pub fn post_message(&self, value: impl AsRef<JsValue>) -> Result<()> {
+        self.worker.post_message(value.as_ref())?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Scope {
+    scope: web_sys::DedicatedWorkerGlobalScope,
+}
+
+impl Scope {
+    pub fn new(scope: impl AsRef<JsValue>) -> Result<Self> {
+        Ok(Self {
+            scope: scope.as_ref().clone().dyn_into()?,
+        })
+    }
+    pub fn set_onmessage(&self, mut callback: impl FnMut(JsValue) + 'static) -> Result<()> {
+        let closure = Closure::wrap(Box::new(move |event| {
+            let event: MessageEvent = event;
+            callback(event.data());
+        }) as Box<dyn FnMut(MessageEvent)>);
+        self.scope.set_onmessage(Some(closure.into_js_value().unchecked_ref()));
+        Ok(())
+    }
+
+    pub fn post_message(&self, message: JsValue) -> Result<()> {
+        self.scope.post_message(&message)?;
+        Ok(())
     }
 }

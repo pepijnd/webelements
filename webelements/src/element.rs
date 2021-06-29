@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use elem::ElemTy;
 use wasm_bindgen::{prelude::Closure, JsCast};
-use web_sys::{InputEvent};
+use web_sys::InputEvent;
 
 use crate::{Error, Result};
 
@@ -18,16 +18,14 @@ pub mod elem {
     element_types!();
 }
 
-pub trait WebElementBuilder
-{
+pub trait WebElementBuilder {
     type Elem: ElemTy;
     fn build() -> Result<Self>
     where
         Self: std::marker::Sized;
 }
 
-pub trait WebElement: WebElementBuilder
-{
+pub trait WebElement: WebElementBuilder {
     fn init(&mut self) -> Result<()>;
 }
 
@@ -58,17 +56,15 @@ where
     }
 
     pub fn from_element(element: E::Elem) -> Self {
-        Self {
-            element
-        }
+        Self { element }
     }
 
     fn as_element(&self) -> &web_sys::Element {
-        &self.element.as_ref()
+        self.element.as_ref()
     }
 
     fn as_node(&self) -> &web_sys::Node {
-        &self.element.as_ref()
+        self.element.as_ref()
     }
 
     pub fn append<T: ElemTy>(&self, other: impl AsRef<Element<T>>) -> Result<()> {
@@ -86,7 +82,7 @@ where
     }
 
     pub fn root(&self) -> &Element<E> {
-        &self
+        self
     }
 
     pub fn has_class(&self, class: impl AsRef<str>) -> bool {
@@ -154,17 +150,15 @@ where
     }
 
     pub fn del_attr(&self, name: impl AsRef<str>) -> Result<()> {
-        self.as_element()
-            .remove_attribute(name.as_ref())?;
+        self.as_element().remove_attribute(name.as_ref())?;
         Ok(())
     }
 
     pub fn attr(&self, name: impl AsRef<str>) -> Option<String> {
-        self.as_element()
-            .get_attribute(name.as_ref())
+        self.as_element().get_attribute(name.as_ref())
     }
 
-    pub fn on_click(&self, callback: impl FnMut(MouseEvent) + 'static ) -> Result<()> {
+    pub fn on_click(&self, callback: impl FnMut(MouseEvent) + 'static) -> Result<()> {
         let closure = Closure::wrap(Box::new(callback) as Box<dyn FnMut(MouseEvent)>);
         self.as_element()
             .add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())
@@ -180,11 +174,10 @@ impl Element<elem::Base> {
     }
 }
 
-impl Element<elem::Button> {
-}
+impl Element<elem::Button> {}
 
 impl Element<elem::Input> {
-    pub fn on_input(&self, callback: impl FnMut(InputEvent) + 'static ) -> Result<()> {
+    pub fn on_input(&self, callback: impl FnMut(InputEvent) + 'static) -> Result<()> {
         let closure = Closure::wrap(Box::new(callback) as Box<dyn FnMut(InputEvent)>);
         self.as_element()
             .add_event_listener_with_callback("input", closure.as_ref().unchecked_ref())
