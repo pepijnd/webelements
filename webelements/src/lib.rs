@@ -6,7 +6,7 @@ use wasm_bindgen::{prelude::*, JsCast, JsValue};
 
 pub use element::{elem, Element, WebElement, WebElementBuilder};
 pub use we_derive::{we_builder, WebElement};
-use web_sys::{KeyboardEvent, MessageEvent};
+use web_sys::{KeyboardEvent, MessageEvent, MouseEvent};
 
 #[non_exhaustive]
 #[derive(Debug)]
@@ -108,6 +108,29 @@ impl Document {
         Ok(())
     }
 
+
+    pub fn on_mouseup(&self, mut callback: impl FnMut(MouseEvent) + 'static) -> Result<()> {
+        let closure =
+            Closure::wrap(Box::new(move |e| callback(e)) as Box<dyn FnMut(MouseEvent)>);
+        self.document
+            .add_event_listener_with_callback("mouseup", closure.as_ref().unchecked_ref())
+            .map_err(Error::JsError)?;
+        closure.forget();
+        Ok(())
+    }
+
+
+
+    pub fn on_click(&self, mut callback: impl FnMut(MouseEvent) + 'static) -> Result<()> {
+        let closure =
+            Closure::wrap(Box::new(move |e| callback(e)) as Box<dyn FnMut(MouseEvent)>);
+        self.document
+            .add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())
+            .map_err(Error::JsError)?;
+        closure.forget();
+        Ok(())
+    }
+
     pub fn body(&self) -> Result<Element<crate::elem::Base>> {
         let element = self.document.body().ok_or(Error::Body)?;
         Ok(Element::from_element(element))
@@ -135,16 +158,30 @@ pub trait Loggable {
 impl<T> Loggable for Result<T> {
     fn log(self) {
         if let Err(err) = self {
-            log(format!("{}", err))
+            log!(err);
         }
     }
 }
 
-#[allow(unused_unsafe)]
-pub fn log<S: AsRef<str>>(str: S) {
-    unsafe {
-        web_sys::console::log_1(&JsValue::from_str(str.as_ref()));
-    }
+pub mod internal {
+    pub use js_sys::Array;
+    pub use web_sys::console::log;
+    pub use wasm_bindgen::JsValue;
+}
+
+#[macro_export]
+macro_rules! log {
+    ($($arg:expr),*) => {
+        {
+            let args: Vec<$crate::internal::JsValue> = vec![
+                $crate::internal::JsValue::from_str(&format!("{} {}:{}\n", file!(), line!(), column!())),
+                $(($arg).into()),*
+            ];
+            let array = args.iter().collect::<$crate::internal::Array>();
+            #[allow(unused_unsafe)]
+            unsafe {$crate::internal::log(&array)};
+        }
+    };
 }
 
 #[derive(Debug, Clone)]
@@ -178,6 +215,10 @@ impl Worker {
         self.worker.post_message(value.as_ref())?;
         Ok(())
     }
+
+    pub fn terminate(&self) {
+        self.worker.terminate()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -196,7 +237,8 @@ impl Scope {
             let event: MessageEvent = event;
             callback(event.data());
         }) as Box<dyn FnMut(MessageEvent)>);
-        self.scope.set_onmessage(Some(closure.into_js_value().unchecked_ref()));
+        self.scope
+            .set_onmessage(Some(closure.into_js_value().unchecked_ref()));
         Ok(())
     }
 
@@ -204,4 +246,8 @@ impl Scope {
         self.scope.post_message(&message)?;
         Ok(())
     }
+}
+
+pub fn num_cpus() -> Result<u32> {
+    Ok(window()?.navigator().hardware_concurrency() as u32)
 }

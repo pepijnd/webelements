@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use elem::ElemTy;
 use wasm_bindgen::{prelude::Closure, JsCast};
-use web_sys::InputEvent;
+use web_sys::{HtmlButtonElement, HtmlInputElement, InputEvent};
 
 use crate::{Error, Result};
 
@@ -166,6 +166,33 @@ where
         closure.forget();
         Ok(())
     }
+
+    pub fn on_mousedown(&self, callback: impl FnMut(MouseEvent) + 'static) -> Result<()> {
+        let closure = Closure::wrap(Box::new(callback) as Box<dyn FnMut(MouseEvent)>);
+        self.as_element()
+            .add_event_listener_with_callback("mousedown", closure.as_ref().unchecked_ref())
+            .map_err(Error::JsError)?;
+        closure.forget();
+        Ok(())
+    }
+
+    pub fn on_mouseenter(&self, callback: impl FnMut(MouseEvent) + 'static) -> Result<()> {
+        let closure = Closure::wrap(Box::new(callback) as Box<dyn FnMut(MouseEvent)>);
+        self.as_element()
+            .add_event_listener_with_callback("mouseenter", closure.as_ref().unchecked_ref())
+            .map_err(Error::JsError)?;
+        closure.forget();
+        Ok(())
+    }
+
+    pub fn on_mouseup(&self, callback: impl FnMut(MouseEvent) + 'static) -> Result<()> {
+        let closure = Closure::wrap(Box::new(callback) as Box<dyn FnMut(MouseEvent)>);
+        self.as_element()
+            .add_event_listener_with_callback("mouseup", closure.as_ref().unchecked_ref())
+            .map_err(Error::JsError)?;
+        closure.forget();
+        Ok(())
+    }
 }
 
 impl Element<elem::Base> {
@@ -174,7 +201,14 @@ impl Element<elem::Base> {
     }
 }
 
-impl Element<elem::Button> {}
+impl Element<elem::Button> {
+    pub fn set_disabled(&self, disabled: bool) {
+        self.as_element()
+            .dyn_ref::<HtmlButtonElement>()
+            .unwrap()
+            .set_disabled(disabled)
+    }
+}
 
 impl Element<elem::Input> {
     pub fn on_input(&self, callback: impl FnMut(InputEvent) + 'static) -> Result<()> {
@@ -200,5 +234,12 @@ impl Element<elem::Input> {
 
     pub fn get_value<T: FromStr>(&self) -> Result<T> {
         self.element.value().parse::<T>().map_err(|_| Error::Value)
+    }
+
+    pub fn set_disabled(&self, disabled: bool) {
+        self.as_element()
+            .dyn_ref::<HtmlInputElement>()
+            .unwrap()
+            .set_disabled(disabled)
     }
 }
